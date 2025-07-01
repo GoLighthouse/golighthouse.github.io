@@ -1,0 +1,238 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tech Trivia Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        #game-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .option {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .option:hover {
+            background-color: #d1d4d7;
+        }
+        .correct {
+            background-color: #28a745 !important;
+        }
+        .incorrect {
+            background-color: #dc3545 !important;
+        }
+        #feedback {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        #hint {
+            font-style: italic;
+            color: #555;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Tech Trivia Challenge</h1>
+        <p id="score">Score: 0/0</p>
+        <p id="question"></p>
+        <p id="hint"></p>
+        <div id="options"></div>
+        <p id="feedback"></p>
+        <button id="next-btn" style="display: none;">Next Question</button>
+    </div>
+
+    <script>
+        const questions = [
+            {
+                question: "Wi-Fi is a household term, but what does it actually stand for?",
+                options: ["Wireless Frequency", "Wireless Fidelity", "Waveform Integration", "Web Frequency"],
+                answer: "Wireless Fidelity",
+                hint: "It’s a play on a term from the audio world!"
+            },
+            {
+                question: "In the 1990s, floppy disks were the go-to for saving files. What was the storage capacity of a standard 3.5-inch floppy disk?",
+                options: ["512 KB", "1.44 MB", "10 MB", "100 MB"],
+                answer: "1.44 MB",
+                hint: "It could barely hold a single MP3 song!"
+            },
+            {
+                question: "What year was the World Wide Web officially introduced to the public?",
+                options: ["1983", "1991", "1995", "2000"],
+                answer: "1991",
+                hint: "It was born at a physics lab in Switzerland!"
+            },
+            {
+                question: "Emojis are everywhere, but which country created the first set of emojis in 1999?",
+                options: ["USA", "Japan", "South Korea", "China"],
+                answer: "Japan",
+                hint: "Think about where mobile phones were booming in the late ’90s!"
+            },
+            {
+                question: "Which open-source operating system is famous for its penguin mascot named Tux?",
+                options: ["Windows", "Linux", "macOS", "Unix"],
+                answer: "Linux",
+                hint: "This OS loves to waddle in the open-source world!"
+            },
+            {
+                question: "How many bytes are in a terabyte?",
+                options: ["1,000", "1,000,000", "1,000,000,000", "1,000,000,000,000"],
+                answer: "1,000,000,000,000",
+                hint: "Think trillions for this one!"
+            },
+            {
+                question: "In 1997, an IBM computer beat world chess champion Garry Kasparov. What was its name?",
+                options: ["Deep Blue", "Watson", "AlphaGo", "HAL 9000"],
+                answer: "Deep Blue",
+                hint: "It’s not from a sci-fi movie, but it made history!"
+            },
+            {
+                question: "Which company released the Oculus Rift, one of the first consumer VR headsets, in 2016?",
+                options: ["Google", "Meta", "Sony", "Microsoft"],
+                answer: "Meta",
+                hint: "This company later rebranded to focus on the metaverse!"
+            }
+        ];
+
+        let currentQuestion = 0;
+        let score = 0;
+        let totalQuestions = questions.length;
+
+        const questionEl = document.getElementById('question');
+        const hintEl = document.getElementById('hint');
+        const optionsEl = document.getElementById('options');
+        const feedbackEl = document.getElementById('feedback');
+        const nextBtn = document.getElementById('next-btn');
+        const scoreEl = document.getElementById('score');
+
+        function loadQuestion() {
+            const q = questions[currentQuestion];
+            questionEl.textContent = q.question;
+            hintEl.textContent = q.hint;
+            optionsEl.innerHTML = '';
+            q.options.forEach(option => {
+                const div = document.createElement('div');
+                div.classList.add('option');
+                div.textContent = option;
+                div.addEventListener('click', () => checkAnswer(option));
+                optionsEl.appendChild(div);
+            });
+            feedbackEl.textContent = '';
+            nextBtn.style.display = 'none';
+            scoreEl.textContent = `Score: ${score}/${totalQuestions}`;
+        }
+
+        function checkAnswer(selected) {
+            const q = questions[currentQuestion];
+            const options = optionsEl.children;
+            for (let i = 0; i < options.length; i++) {
+                options[i].style.pointerEvents = 'none';
+                if (options[i].textContent === q.answer) {
+                    options[i].classList.add('correct');
+                } else if (options[i].textContent === selected && selected !== q.answer) {
+                    options[i].classList.add('incorrect');
+                }
+            }
+            if (selected === q.answer) {
+                score++;
+                feedbackEl.textContent = 'Correct!';
+                feedbackEl.style.color = 'green';
+            } else {
+                feedbackEl.textContent = `Incorrect! The correct answer is: ${q.answer}`;
+                feedbackEl.style.color = 'red';
+            }
+            scoreEl.textContent = `Score: ${score}/${totalQuestions}`;
+            nextBtn.style.display = 'block';
+        }
+
+        nextBtn.addEventListener('click', () => {
+            currentQuestion++;
+            if (currentQuestion < questions.length) {
+                loadQuestion();
+            } else {
+                questionEl.textContent = 'Game Over!';
+                hintEl.textContent = '';
+                optionsEl.innerHTML = '';
+                feedbackEl.textContent = `Final Score: ${score}/${totalQuestions}`;
+                nextBtn.style.display = 'none';
+            }
+        });
+
+        loadQuestion();
+    </script>
+</body>
+</html>
